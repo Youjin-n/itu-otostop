@@ -147,7 +147,7 @@ export const api = {
     fetchAPI<Record<string, CourseInfo | null>>("/api/crn-lookup", {
       method: "POST",
       body: JSON.stringify({ crns }),
-    }).catch(() => ({})),
+    }),
 
   getDepartments: () =>
     fetchAPI<Array<{ bransKoduId: number; dersBransKodu: string }>>(

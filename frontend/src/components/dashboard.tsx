@@ -165,12 +165,24 @@ export function Dashboard() {
   }, [token]);
 
   // Auto-lookup CRN course info from OBS
+  const [lookupRetry, setLookupRetry] = useState(0);
+
   useEffect(() => {
     const allCRNs = [...new Set([...crnList, ...scrnList])];
-    // Only lookup CRNs we don't already have info for
-    const missing = allCRNs.filter(
-      (crn) => !courseInfo[crn] && !lookingUpCRNs.has(crn),
-    );
+    // Lookup CRNs we don't have OR that previously failed (no sessions + placeholder name)
+    const missing = allCRNs.filter((crn) => {
+      if (lookingUpCRNs.has(crn)) return false;
+      const info = courseInfo[crn];
+      if (!info) return true;
+      // Retry CRNs that failed before (placeholder entries)
+      if (
+        info.sessions.length === 0 &&
+        (info.course_name === "Yüklenemedi" ||
+          info.course_name === "Bulunamadı")
+      )
+        return true;
+      return false;
+    });
     if (missing.length === 0) return;
 
     // Track in-flight to prevent duplicate requests
@@ -179,34 +191,37 @@ export function Dashboard() {
     api
       .lookupCRNs(missing)
       .then((results) => {
-        if (results && Object.keys(results).length > 0) {
-          setCourseInfo((prev) => {
-            const next = { ...prev };
-            for (const [crn, info] of Object.entries(results)) {
-              if (info) next[crn] = info;
-              else
-                next[crn] = {
-                  crn,
-                  course_code: crn,
-                  course_name: "Bulunamadı",
-                  instructor: "",
-                  teaching_method: "",
-                  capacity: 0,
-                  enrolled: 0,
-                  programmes: "",
-                  sessions: [],
-                } as CourseInfo;
-            }
-            return next;
-          });
-        }
-      })
-      .catch(() => {
-        // Mark failed CRNs with placeholder to prevent infinite retry
         setCourseInfo((prev) => {
           const next = { ...prev };
           for (const crn of missing) {
-            if (!next[crn])
+            const info = results?.[crn];
+            if (info && info.sessions?.length > 0) {
+              next[crn] = info;
+            } else if (info) {
+              next[crn] = info;
+            } else {
+              next[crn] = {
+                crn,
+                course_code: crn,
+                course_name: "Bulunamadı",
+                instructor: "",
+                teaching_method: "",
+                capacity: 0,
+                enrolled: 0,
+                programmes: "",
+                sessions: [],
+              } as CourseInfo;
+            }
+          }
+          return next;
+        });
+      })
+      .catch(() => {
+        // Mark failed CRNs with placeholder — will be retried
+        setCourseInfo((prev) => {
+          const next = { ...prev };
+          for (const crn of missing) {
+            if (!next[crn] || next[crn].course_name === "Yüklenemedi")
               next[crn] = {
                 crn,
                 course_code: crn,
@@ -221,6 +236,11 @@ export function Dashboard() {
           }
           return next;
         });
+        // Schedule automatic retry (3s, 6s, 12s — max 3 retries)
+        setTimeout(
+          () => setLookupRetry((r) => r + 1),
+          Math.min(3000 * Math.pow(2, lookupRetry), 12000),
+        );
       })
       .finally(() => {
         setLookingUpCRNs((prev) => {
@@ -230,7 +250,7 @@ export function Dashboard() {
         });
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [crnList, scrnList]);
+  }, [crnList, scrnList, lookupRetry]);
 
   // Calibrate
   const handleCalibrate = async () => {

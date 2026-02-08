@@ -1,8 +1,9 @@
 
-# Herhangi bir .env dosyası
+# Herhangi bir .env dosyası (local overrides + secrets)
 .env
 .env.*
 !.env.example
+!frontend/.env
 
 # ══════════════════════════════════════════
 # 🐍 Python
