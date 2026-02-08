@@ -1,0 +1,266 @@
+"""
+OBS Ders Kayıt API — FastAPI Backend
+Kayıt motorunu kontrol eden REST + WebSocket API.
+"""
+
+import asyncio
+import json
+import time
+import threading
+from contextlib import asynccontextmanager
+from typing import Optional
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+
+from models import (
+    ConfigRequest, ConfigResponse, CalibrationResult,
+    RegistrationState, TokenTestResult, CRNResultItem, CRNStatus,
+)
+from engine import RegistrationEngine
+
+
+# ── Global state ──
+
+class AppState:
+    def __init__(self):
+        self.token: str = ""
+        self.ecrn_list: list[str] = []
+        self.scrn_list: list[str] = []
+        self.kayit_saati: str = "14:00:00"
+        self.max_deneme: int = 60
+        self.retry_aralik: float = 3.0
+        self.gecikme_buffer: float = 0.005
+        self.engine: Optional[RegistrationEngine] = None
+        self.engine_thread: Optional[threading.Thread] = None
+        self.ws_clients: list[WebSocket] = []
+
+state = AppState()
+
+
+# ── App ──
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    # Shutdown: cancel any running engine
+    if state.engine and state.engine.is_running:
+        state.engine.cancel()
+
+app = FastAPI(
+    title="İTÜ Otostop API",
+    description="İTÜ OBS otomatik ders kayıt sistemi - Otostop",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ── WebSocket broadcast ──
+
+async def broadcast(event: dict):
+    msg = json.dumps(event, ensure_ascii=False)
+    disconnected = []
+    for ws in state.ws_clients:
+        try:
+            await ws.send_text(msg)
+        except Exception:
+            disconnected.append(ws)
+    for ws in disconnected:
+        state.ws_clients.remove(ws)
+
+
+async def poll_engine_events():
+    """Engine event kuyruğunu sürekli okuyup WebSocket'e yayınla."""
+    while state.engine and (state.engine.is_running or not state.engine._events.empty()):
+        events = state.engine.get_events()
+        for event in events:
+            await broadcast(event)
+        await asyncio.sleep(0.1)
+    # Son eventleri gönder
+    if state.engine:
+        events = state.engine.get_events()
+        for event in events:
+            await broadcast(event)
+
+
+# ── REST Endpoints ──
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok", "time": time.time()}
+
+
+@app.post("/api/config", response_model=ConfigResponse)
+async def set_config(req: ConfigRequest):
+    state.token = req.token
+    state.ecrn_list = req.ecrn_list
+    state.scrn_list = req.scrn_list
+    state.kayit_saati = req.kayit_saati
+    state.max_deneme = req.max_deneme
+    state.retry_aralik = req.retry_aralik
+    state.gecikme_buffer = req.gecikme_buffer
+    return _config_response()
+
+
+@app.get("/api/config", response_model=ConfigResponse)
+async def get_config():
+    return _config_response()
+
+
+def _config_response() -> ConfigResponse:
+    preview = ""
+    if state.token:
+        preview = state.token[:20] + "..." + state.token[-10:]
+    return ConfigResponse(
+        ecrn_list=state.ecrn_list,
+        scrn_list=state.scrn_list,
+        kayit_saati=state.kayit_saati,
+        max_deneme=state.max_deneme,
+        retry_aralik=state.retry_aralik,
+        gecikme_buffer=state.gecikme_buffer,
+        token_set=bool(state.token),
+        token_preview=preview,
+    )
+
+
+@app.post("/api/test-token", response_model=TokenTestResult)
+async def test_token():
+    if not state.token:
+        raise HTTPException(400, "Token ayarlanmamış")
+    engine = RegistrationEngine(
+        token=state.token,
+        ecrn_list=["00000"],
+    )
+    result = await asyncio.to_thread(engine.test_token)
+    return TokenTestResult(**result)
+
+
+@app.post("/api/calibrate", response_model=CalibrationResult)
+async def calibrate():
+    if not state.token:
+        raise HTTPException(400, "Token ayarlanmamış")
+    engine = RegistrationEngine(
+        token=state.token,
+        ecrn_list=state.ecrn_list or ["00000"],
+    )
+    cal = await asyncio.to_thread(engine.calibrate)
+    return CalibrationResult(
+        server_offset_ms=cal.server_offset * 1000,
+        rtt_one_way_ms=cal.rtt_one_way * 1000,
+        rtt_full_ms=cal.rtt_one_way * 2000,
+        ntp_offset_ms=cal.ntp_offset * 1000,
+        server_ntp_diff_ms=(cal.server_offset - cal.ntp_offset) * 1000,
+        accuracy_ms=cal.rtt_one_way * 1000,
+    )
+
+
+@app.post("/api/register/start")
+async def start_registration():
+    if not state.token:
+        raise HTTPException(400, "Token ayarlanmamış")
+    if not state.ecrn_list:
+        raise HTTPException(400, "CRN listesi boş")
+    if state.engine and state.engine.is_running:
+        raise HTTPException(409, "Kayıt zaten çalışıyor")
+
+    state.engine = RegistrationEngine(
+        token=state.token,
+        ecrn_list=state.ecrn_list,
+        scrn_list=state.scrn_list,
+        kayit_saati=state.kayit_saati,
+        max_deneme=state.max_deneme,
+        retry_aralik=state.retry_aralik,
+        gecikme_buffer=state.gecikme_buffer,
+    )
+
+    # Engine'i ayrı thread'de başlat
+    state.engine_thread = threading.Thread(target=state.engine.run, daemon=True)
+    state.engine_thread.start()
+
+    # Event polling'i background task olarak başlat
+    asyncio.create_task(poll_engine_events())
+
+    return {"status": "started", "message": "Kayıt başlatıldı"}
+
+
+@app.post("/api/register/cancel")
+async def cancel_registration():
+    if not state.engine or not state.engine.is_running:
+        raise HTTPException(404, "Çalışan kayıt yok")
+    state.engine.cancel()
+    return {"status": "cancelled"}
+
+
+@app.get("/api/register/status", response_model=RegistrationState)
+async def registration_status():
+    if not state.engine:
+        return RegistrationState()
+
+    crn_results = []
+    for crn, info in state.engine.crn_results.items():
+        try:
+            status = CRNStatus(info["status"])
+        except ValueError:
+            status = CRNStatus.PENDING
+        crn_results.append(CRNResultItem(crn=crn, status=status, message=info.get("message", "")))
+
+    cal = None
+    if state.engine.calibration:
+        c = state.engine.calibration
+        cal = CalibrationResult(
+            server_offset_ms=c.server_offset * 1000,
+            rtt_one_way_ms=c.rtt_one_way * 1000,
+            rtt_full_ms=c.rtt_one_way * 2000,
+            ntp_offset_ms=c.ntp_offset * 1000,
+            server_ntp_diff_ms=(c.server_offset - c.ntp_offset) * 1000,
+            accuracy_ms=c.rtt_one_way * 1000,
+        )
+
+    remaining = None
+    if state.engine.trigger_time:
+        remaining = max(0, state.engine.trigger_time - time.time())
+
+    return RegistrationState(
+        phase=state.engine.phase,
+        running=state.engine.is_running,
+        current_attempt=state.engine.current_attempt,
+        max_attempts=state.max_deneme,
+        crn_results=crn_results,
+        calibration=cal,
+        countdown_seconds=remaining,
+        trigger_time=state.engine.trigger_time,
+    )
+
+
+# ── WebSocket ──
+
+@app.websocket("/ws")
+async def websocket_endpoint(ws: WebSocket):
+    await ws.accept()
+    state.ws_clients.append(ws)
+    try:
+        while True:
+            # Ping/pong veya client mesajlarını oku
+            data = await ws.receive_text()
+            if data == "ping":
+                await ws.send_text(json.dumps({"type": "pong"}))
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if ws in state.ws_clients:
+            state.ws_clients.remove(ws)
+
+
+# ── Run ──
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
