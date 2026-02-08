@@ -444,12 +444,25 @@ class RegistrationEngine:
     # ── Ana orkestratör (thread içinde çalışır) ──
 
     def run(self):
-        """Tam kayıt akışı: kalibrasyon → ısınma → bekleme → kayıt."""
+        """Tam kayıt akışı: token kontrol → kalibrasyon → ısınma → bekleme → kayıt."""
         self._running = True
-        self._set_phase("calibrating")
 
         try:
+            # 0. Token geçerlilik kontrolü
+            self._set_phase("token_check")
+            self._log("🔑 Token kontrol ediliyor...")
+            token_result = self.test_token()
+            if not token_result["valid"]:
+                self._log(f"❌ Token geçersiz: {token_result['message']}", "error")
+                self._log("Lütfen OBS'den yeni token alıp tekrar deneyin.", "error")
+                return
+            self._log("✅ Token geçerli")
+
+            if self._cancelled.is_set():
+                return
+
             # 1. Kalibrasyon
+            self._set_phase("calibrating")
             cal = self.calibrate()
             if self._cancelled.is_set():
                 return

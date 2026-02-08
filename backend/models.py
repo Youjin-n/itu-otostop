@@ -15,7 +15,7 @@ class CRNStatus(str, Enum):
 
 
 class ConfigRequest(BaseModel):
-    token: str = Field(..., description="JWT Bearer token")
+    token: Optional[str] = Field(default=None, description="JWT Bearer token (gönderilmezse mevcut token korunur)")
     ecrn_list: list[str] = Field(..., description="Eklenecek CRN listesi")
     scrn_list: list[str] = Field(default_factory=list, description="Silinecek CRN listesi")
     kayit_saati: str = Field(default="14:00:00", pattern=r"^\d{2}:\d{2}:\d{2}$")

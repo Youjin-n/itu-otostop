@@ -20,6 +20,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 export function Dashboard() {
   // Config state
   const [token, setToken] = useState("");
+  const [tokenChanged, setTokenChanged] = useState(false);
   const [crnList, setCrnList] = useState<string[]>([]);
   const [scrnList, setScrnList] = useState<string[]>([]);
   const [kayitSaati, setKayitSaati] = useState("14:00:00");
@@ -36,6 +37,7 @@ export function Dashboard() {
   const ws = useWebSocket();
 
   const isRunning =
+    ws.phase === "token_check" ||
     ws.phase === "calibrating" ||
     ws.phase === "waiting" ||
     ws.phase === "registering";
@@ -62,7 +64,8 @@ export function Dashboard() {
   const saveConfig = useCallback(async () => {
     try {
       await api.setConfig({
-        token,
+        // Token sadece kullanıcı değiştirdiyse gönder
+        ...(tokenChanged && token ? { token } : {}),
         ecrn_list: crnList,
         scrn_list: scrnList,
         kayit_saati: kayitSaati,
@@ -75,6 +78,7 @@ export function Dashboard() {
     }
   }, [
     token,
+    tokenChanged,
     crnList,
     scrnList,
     kayitSaati,
@@ -100,19 +104,10 @@ export function Dashboard() {
     saveConfig,
   ]);
 
-  // Token test callback
-  const handleTestToken = useCallback(async () => {
-    try {
-      const result = await api.testToken();
-      setTokenValid(result.valid);
-    } catch {
-      setTokenValid(false);
-    }
-  }, []);
-
   // Watch token changes for test button state
   useEffect(() => {
     setTokenValid(null);
+    setTokenChanged(true);
   }, [token]);
 
   // Calibrate

@@ -33,6 +33,7 @@ class AppState:
         self.gecikme_buffer: float = 0.005
         self.engine: Optional[RegistrationEngine] = None
         self.engine_thread: Optional[threading.Thread] = None
+        self.poll_task: Optional[asyncio.Task] = None
         self.ws_clients: list[WebSocket] = []
 
 state = AppState()
@@ -91,6 +92,16 @@ async def poll_engine_events():
             await broadcast(event)
 
 
+def _poll_task_done(task: asyncio.Task):
+    """Poll task bittiğinde hata varsa logla."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc:
+        import traceback
+        traceback.print_exception(type(exc), exc, exc.__traceback__)
+
+
 # ── REST Endpoints ──
 
 @app.get("/api/health")
@@ -100,7 +111,9 @@ async def health():
 
 @app.post("/api/config", response_model=ConfigResponse)
 async def set_config(req: ConfigRequest):
-    state.token = req.token
+    # Token sadece gönderildiğinde güncellenir (partial update)
+    if req.token is not None and req.token != "":
+        state.token = req.token
     state.ecrn_list = req.ecrn_list
     state.scrn_list = req.scrn_list
     state.kayit_saati = req.kayit_saati
@@ -186,7 +199,8 @@ async def start_registration():
     state.engine_thread.start()
 
     # Event polling'i background task olarak başlat
-    asyncio.create_task(poll_engine_events())
+    state.poll_task = asyncio.create_task(poll_engine_events())
+    state.poll_task.add_done_callback(_poll_task_done)
 
     return {"status": "started", "message": "Kayıt başlatıldı"}
 

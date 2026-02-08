@@ -85,7 +85,7 @@ export function SettingsPanel({
             </div>
             <div className="space-y-2">
               <Label className="flex items-center gap-1.5 text-xs">
-                <RefreshCcw className="h-3 w-3" /> Debounce (sn)
+                <RefreshCcw className="h-3 w-3" /> Retry Aralığı (sn)
               </Label>
               <Input
                 type="number"
@@ -117,8 +117,8 @@ export function SettingsPanel({
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            Debounce: Sunucu 3sn'den sık istekleri yok sayar. Buffer: Erken
-            varış cezasını önler (+5ms önerilen).
+            Retry Aralığı: Sunucu 3sn&apos;den sık istekleri yok sayar (VAL16).
+            Buffer: Erken varış cezasını önler (+5ms önerilen).
           </p>
         </CardContent>
       </motion.div>

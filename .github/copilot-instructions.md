@@ -8,7 +8,7 @@
 ## Architecture
 
 - `requests` Session with keep-alive + `HTTPAdapter` for connection pooling.
-- Auth: JWT `Authorization` + `LoginCookie` in `HEADERS` (must be refreshed before each registration session).
+- Auth: JWT `Authorization: Bearer` header only (must be refreshed before each registration session).
 - Constants: `OBS_URL`, `OBS_BASE`, `HEADERS`, `ECRN_LIST`, `SCRN_LIST`, `KAYIT_SAATI`.
 - Timing: `sunucu_offset_olc()` measures server clock via HTTP `Date` header transitions (+-RTT/2 accuracy). NTP is used only for comparison logging, NOT for timing.
 - Auto-install: `_ensure_package()` runs `pip install -q` for missing packages at startup.
@@ -52,5 +52,5 @@ the server's Date header changes seconds, measuring the offset to +-3ms accuracy
 
 - No tests or build steps.
 - Run directly: `python claudeai2-optimal.py (standalone, not in repo)`
-- Requires valid JWT + LoginCookie in HEADERS (login to OBS web, copy tokens).
+- Requires valid JWT Bearer token in HEADERS (login to OBS web, copy token from Authorization header).
 - Run 2-5 minutes before `KAYIT_SAATI` - calibration takes ~30-40 seconds.

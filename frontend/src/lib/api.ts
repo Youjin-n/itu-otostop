@@ -3,7 +3,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 // ── Types ──
 
 export interface ConfigData {
-  token: string;
+  token?: string; // undefined = mevcut token korunsun
   ecrn_list: string[];
   scrn_list: string[];
   kayit_saati: string;

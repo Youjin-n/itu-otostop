@@ -12,6 +12,9 @@ export interface LogEntry {
 
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const [connected, setConnected] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [phase, setPhase] = useState<string>("idle");
@@ -36,7 +39,7 @@ export function useWebSocket() {
       ws.onclose = () => {
         setConnected(false);
         // Auto reconnect after 3s
-        setTimeout(connect, 3000);
+        reconnectTimeoutRef.current = setTimeout(connect, 3000);
       };
 
       ws.onerror = () => ws.close();
@@ -103,11 +106,15 @@ export function useWebSocket() {
 
       wsRef.current = ws;
     } catch {
-      setTimeout(connect, 3000);
+      reconnectTimeoutRef.current = setTimeout(connect, 3000);
     }
   }, []);
 
   const disconnect = useCallback(() => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
     wsRef.current?.close();
     wsRef.current = null;
   }, []);

@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
 interface CRNManagerProps {
   crnList: string[];
@@ -51,10 +52,15 @@ export function CRNManager({
 
   const addCRN = () => {
     const trimmed = input.trim();
-    if (trimmed && !crnList.includes(trimmed)) {
-      onCrnListChange([...crnList, trimmed]);
-      setInput("");
+    if (!trimmed) return;
+    if (!/^\d{5}$/.test(trimmed)) {
+      toast.error("CRN 5 haneli sayısal olmalı (örn: 12345)");
+      return;
     }
+    if (!crnList.includes(trimmed)) {
+      onCrnListChange([...crnList, trimmed]);
+    }
+    setInput("");
   };
 
   const removeCRN = (crn: string) => {
