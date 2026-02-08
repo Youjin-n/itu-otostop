@@ -722,9 +722,7 @@ export function Dashboard() {
           </p>
           <div className="flex items-center justify-center gap-3 text-[10px] text-muted-foreground/25">
             <a
-              href="https://github.com/Youjin-n/itu-otostop/issues"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="mailto:nubealbor@gmail.com?subject=İTÜ Otostop - Sorun Bildirimi"
               className="hover:text-muted-foreground/50 transition-colors underline underline-offset-2"
             >
               Sorun Bildir
