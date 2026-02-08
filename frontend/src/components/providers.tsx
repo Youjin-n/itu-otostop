@@ -16,19 +16,35 @@ function ClerkThemeWrapper({ children }: { children: React.ReactNode }) {
       localization={{
         ...trTR,
         signIn: {
-          ...(trTR as Record<string, unknown>).signIn as Record<string, unknown>,
+          ...((trTR as Record<string, unknown>).signIn as Record<
+            string,
+            unknown
+          >),
           start: {
-            ...((trTR as Record<string, unknown>).signIn as Record<string, unknown>)?.start as Record<string, unknown>,
-            title: "İTÜ OBS Kayıt",
+            ...((
+              (trTR as Record<string, unknown>).signIn as Record<
+                string,
+                unknown
+              >
+            )?.start as Record<string, unknown>),
+            title: "İTÜ Otostop",
             subtitle: "Otomatik ders kayıt aracına giriş yap",
           },
         } as never,
         signUp: {
-          ...(trTR as Record<string, unknown>).signUp as Record<string, unknown>,
+          ...((trTR as Record<string, unknown>).signUp as Record<
+            string,
+            unknown
+          >),
           start: {
-            ...((trTR as Record<string, unknown>).signUp as Record<string, unknown>)?.start as Record<string, unknown>,
-            title: "İTÜ OBS Kayıt",
-            subtitle: "Hesap oluştur ve kayıt aracını kullanmaya başla",
+            ...((
+              (trTR as Record<string, unknown>).signUp as Record<
+                string,
+                unknown
+              >
+            )?.start as Record<string, unknown>),
+            title: "İTÜ Otostop",
+            subtitle: "Hesap oluştur ve hemen başla",
           },
         } as never,
         userButton: {

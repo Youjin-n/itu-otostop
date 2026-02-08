@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Play, Square, Gauge, Zap, Volume2, VolumeX } from "lucide-react";
 import { toast } from "sonner";
@@ -53,7 +53,6 @@ export function Dashboard() {
   // Course info from OBS API
   const [courseInfo, setCourseInfo] = useState<Record<string, CourseInfo>>({});
   const [lookingUpCRNs, setLookingUpCRNs] = useState<Set<string>>(new Set());
-  const attemptedCRNs = useRef(new Set<string>());
 
   const isRunning =
     ws.phase === "token_check" ||
@@ -126,20 +125,18 @@ export function Dashboard() {
   // Auto-save config on changes (backend + cloud)
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (token || crnList.length > 0 || scrnList.length > 0) {
-        saveConfig();
-        // Cloud sync (token excluded for security)
-        if (clerkUserId) {
-          ConfigService.saveUserConfig(clerkUserId, {
-            ecrn_list: crnList,
-            scrn_list: scrnList,
-            kayit_saati: kayitSaati,
-            max_deneme: maxDeneme,
-            retry_aralik: retryAralik,
-            gecikme_buffer: gecikmeBuffer,
-            dry_run: dryRun,
-          });
-        }
+      saveConfig();
+      // Cloud sync (token excluded for security)
+      if (clerkUserId) {
+        ConfigService.saveUserConfig(clerkUserId, {
+          ecrn_list: crnList,
+          scrn_list: scrnList,
+          kayit_saati: kayitSaati,
+          max_deneme: maxDeneme,
+          retry_aralik: retryAralik,
+          gecikme_buffer: gecikmeBuffer,
+          dry_run: dryRun,
+        });
       }
     }, 500);
     return () => clearTimeout(timer);
@@ -168,33 +165,62 @@ export function Dashboard() {
   }, [token]);
 
   // Auto-lookup CRN course info from OBS
-  // Uses attemptedCRNs ref to prevent infinite re-fetch loops
   useEffect(() => {
     const allCRNs = [...new Set([...crnList, ...scrnList])];
+    // Only lookup CRNs we don't already have info for
     const missing = allCRNs.filter(
-      (crn) => !attemptedCRNs.current.has(crn),
+      (crn) => !courseInfo[crn] && !lookingUpCRNs.has(crn),
     );
     if (missing.length === 0) return;
 
-    // Mark as attempted IMMEDIATELY to prevent re-entry
-    missing.forEach((crn) => attemptedCRNs.current.add(crn));
+    // Track in-flight to prevent duplicate requests
     setLookingUpCRNs((prev) => new Set([...prev, ...missing]));
 
     api
       .lookupCRNs(missing)
       .then((results) => {
-        if (results) {
+        if (results && Object.keys(results).length > 0) {
           setCourseInfo((prev) => {
             const next = { ...prev };
             for (const [crn, info] of Object.entries(results)) {
               if (info) next[crn] = info;
+              else
+                next[crn] = {
+                  crn,
+                  course_code: crn,
+                  course_name: "Bulunamadı",
+                  instructor: "",
+                  teaching_method: "",
+                  capacity: 0,
+                  enrolled: 0,
+                  programmes: "",
+                  sessions: [],
+                } as CourseInfo;
             }
             return next;
           });
         }
       })
       .catch(() => {
-        // Silent fail — labels just won't appear
+        // Mark failed CRNs with placeholder to prevent infinite retry
+        setCourseInfo((prev) => {
+          const next = { ...prev };
+          for (const crn of missing) {
+            if (!next[crn])
+              next[crn] = {
+                crn,
+                course_code: crn,
+                course_name: "Yüklenemedi",
+                instructor: "",
+                teaching_method: "",
+                capacity: 0,
+                enrolled: 0,
+                programmes: "",
+                sessions: [],
+              } as CourseInfo;
+          }
+          return next;
+        });
       })
       .finally(() => {
         setLookingUpCRNs((prev) => {
@@ -203,6 +229,7 @@ export function Dashboard() {
           return next;
         });
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [crnList, scrnList]);
 
   // Calibrate
@@ -342,7 +369,7 @@ export function Dashboard() {
               <Zap className="h-4 w-4 text-primary" />
             </div>
             <h1 className="text-sm font-bold tracking-tight text-gradient-primary">
-              İTÜ OBS Kayıt
+              İTÜ Otostop
             </h1>
             <AnimatePresence>
               {dryRun && (
@@ -666,7 +693,7 @@ export function Dashboard() {
       <footer className="relative z-10 mt-16 border-t border-border/5">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-2 text-center">
           <p className="text-[11px] text-muted-foreground/30 font-medium">
-            İTÜ OBS Ders Kayıt Otomasyon Aracı v1.0.0 —{" "}
+            İTÜ Otostop — Ders Kayıt Otomasyon Aracı v1.0.0 —{" "}
             {new Date().getFullYear()}
           </p>
           <p className="text-[10px] text-muted-foreground/20">

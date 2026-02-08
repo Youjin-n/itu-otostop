@@ -15,7 +15,7 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "İTÜ OBS Ders Kayıt",
+  title: "İTÜ Otostop",
   description: "İTÜ OBS otomatik ders kayıt aracı",
 };
 
