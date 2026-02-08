@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { createWebSocket, type WSEvent } from "@/lib/api";
+import {
+  createWebSocket,
+  type WSEvent,
+  type CalibrationResult,
+} from "@/lib/api";
 
 export interface LogEntry {
   id: number;
@@ -22,7 +26,7 @@ export function useWebSocket() {
   const [crnResults, setCrnResults] = useState<
     Record<string, { status: string; message: string }>
   >({});
-  const [calibration, setCalibration] = useState<Record<string, number> | null>(
+  const [calibration, setCalibration] = useState<CalibrationResult | null>(
     null,
   );
   const [done, setDone] = useState(false);
@@ -81,7 +85,7 @@ export function useWebSocket() {
               break;
 
             case "calibration":
-              setCalibration(event.data as Record<string, number>);
+              setCalibration(event.data as CalibrationResult);
               break;
 
             case "done":

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { motion } from "motion/react";
 import { Play, Square, Gauge, Zap } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, type CalibrationResult } from "@/lib/api";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { TokenInput } from "@/components/token-input";
 import { CRNManager } from "@/components/crn-manager";
@@ -30,10 +30,8 @@ export function Dashboard() {
   const [tokenValid, setTokenValid] = useState<boolean | null>(null);
   const [calibrating, setCalibrating] = useState(false);
   const [starting, setStarting] = useState(false);
-  const [calibrationData, setCalibrationData] = useState<Record<
-    string,
-    number
-  > | null>(null);
+  const [calibrationData, setCalibrationData] =
+    useState<CalibrationResult | null>(null);
 
   // WebSocket real-time data
   const ws = useWebSocket();

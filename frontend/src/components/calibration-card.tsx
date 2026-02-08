@@ -2,9 +2,10 @@
 
 import { motion } from "motion/react";
 import { Activity, Server, Wifi, Clock } from "lucide-react";
+import type { CalibrationResult } from "@/lib/api";
 
 interface CalibrationCardProps {
-  calibration: Record<string, number> | null;
+  calibration: CalibrationResult | null;
   loading?: boolean;
 }
 
