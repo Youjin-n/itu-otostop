@@ -277,7 +277,7 @@ export function PresetManager({
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="glass rounded-2xl p-6 mx-4 max-w-sm w-full space-y-4 ring-1 ring-border/20 shadow-2xl"
+              className="rounded-2xl p-6 mx-4 max-w-sm w-full space-y-4 ring-1 ring-border/30 shadow-2xl bg-zinc-900/95 backdrop-blur-xl"
             >
               <div className="flex items-start gap-3">
                 <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0 mt-0.5">
