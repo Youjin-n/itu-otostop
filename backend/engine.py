@@ -358,43 +358,91 @@ class RegistrationEngine:
     # ── Dry-Run Simülasyonu ──
 
     def _kayit_yap_dry_run(self):
-        """Gerçek kayıt yapmadan simülasyon çalıştır."""
+        """DRY RUN: Gerçek sunucuya dummy CRN ile istek atarak zamanlama doğruluğunu analiz eder."""
         kalan = list(self.ecrn_list)
-        basarili = []
 
         for crn in kalan:
             self._crn_results[crn] = {"status": "pending", "message": "Bekliyor (DRY RUN)"}
 
-        self._log("🧪 DRY RUN — Gerçek kayıt yapılmayacak!", "warning")
+        self._log("═══════════════════════════════════", "warning")
+        self._log("🧪 DRY RUN — Zamanlama Analizi", "warning")
+        self._log("═══════════════════════════════════", "warning")
 
-        # Simülasyon: ilk 2 deneme VAL02, sonra başarı
-        for deneme in range(1, min(self.max_deneme, 5) + 1):
+        hedef = self._saat_to_epoch(self.kayit_saati)
+
+        # 1. Gerçek sunucuya dummy istek at — zamanlama ölçümü
+        self._log("🎯 Gerçek sunucuya test isteği gönderiliyor (dummy CRN: 00000)...")
+        t0_wall = time.time()
+        t0_perf = time.perf_counter()
+        try:
+            resp = self.session.post(OBS_URL, json={"ECRN": ["00000"], "SCRN": []}, timeout=10)
+            t1_wall = time.time()
+            t1_perf = time.perf_counter()
+            rtt_ms = (t1_perf - t0_perf) * 1000
+            gonderim_wall = t0_wall
+            varis_tahmini = t0_wall + (t1_perf - t0_perf) / 2  # RTT/2 = sunucu varış tahmini
+            hedef_fark_ms = (gonderim_wall - hedef) * 1000
+            varis_fark_ms = (varis_tahmini - hedef) * 1000
+
+            self._log(f"📊 HTTP {resp.status_code} | RTT: {rtt_ms:.0f}ms")
+            self._log("─────────────────────────────────")
+            self._log(f"📤 İstek gönderim zamanı: hedef {hedef_fark_ms:+.0f}ms")
+            self._log(f"📥 Tahmini sunucu varış: hedef {varis_fark_ms:+.0f}ms")
+
+            # Sunucu Date header'ından gerçek sunucu saati doğrulaması
+            server_date = resp.headers.get("Date", "")
+            if server_date:
+                try:
+                    server_ts = parsedate_to_datetime(server_date).timestamp()
+                    server_hedef_fark = (server_ts - hedef) * 1000
+                    self._log(f"🕐 Sunucu Date header: hedef {server_hedef_fark:+.0f}ms")
+                except Exception:
+                    pass
+
+            # Değerlendirme
+            if abs(varis_fark_ms) <= 50:
+                self._log(f"✅ MÜKEMMEL — İstek hedefe ±50ms içinde ulaştı ({varis_fark_ms:+.0f}ms)")
+            elif abs(varis_fark_ms) <= 200:
+                self._log(f"👍 İYİ — İstek hedefe ±200ms içinde ({varis_fark_ms:+.0f}ms)")
+            elif varis_fark_ms < -200:
+                self._log(f"⚠️ ERKEN — İstek {abs(varis_fark_ms):.0f}ms erken gitti (VAL02 riski)", "warning")
+            else:
+                self._log(f"⚠️ GEÇ — İstek {varis_fark_ms:.0f}ms geç gitti (kontenjan kaçırma riski)", "warning")
+
+            self._log("─────────────────────────────────")
+
+            # Kalibrasyon verileriyle karşılaştır
+            if self._calibration:
+                cal = self._calibration
+                self._log(f"📐 Kalibrasyon: offset={cal.server_offset*1000:+.0f}ms, RTT={cal.rtt_one_way*1000:.0f}ms")
+                teorik_varis = hedef_fark_ms + cal.rtt_one_way * 1000
+                self._log(f"📐 Teorik sunucu varış: hedef {teorik_varis:+.0f}ms")
+
+        except Exception as e:
+            self._log(f"❌ Test isteği hatası: {e}", "error")
+
+        self._log("─────────────────────────────────")
+
+        # 2. Sonuçları simüle et (gerçek kayıtta ne olacağını göster)
+        self._log("🧪 CRN sonuçları simüle ediliyor...")
+        for deneme in range(1, min(self.max_deneme, 4) + 1):
             if not kalan or self._cancelled.is_set():
                 break
-
             self._current_attempt = deneme
-            t0 = time.perf_counter()
-            time.sleep(0.05)  # Simule edilmiş RTT
-            ms = (time.perf_counter() - t0) * 1000
-            tag = "İLK İSTEK" if deneme == 1 else f"D{deneme}"
-
             if deneme <= 2:
-                self._log(f"🧪 {tag} → {ms:.0f}ms | SİMÜLASYON: VAL02 (sistem kapalı)")
                 for crn in kalan:
                     self._crn_results[crn] = {"status": "debounce", "message": "DRY RUN: Sistem henüz açılmadı"}
                 self._emit("crn_update", {"results": dict(self._crn_results)})
-                time.sleep(self.retry_aralik)
+                time.sleep(0.1)
             else:
-                self._log(f"🧪 {tag} → {ms:.0f}ms | SİMÜLASYON: BAŞARILI!")
                 for crn in list(kalan):
-                    self._log(f"🧪 ✅ {crn} → SİMÜLE EDİLMİŞ BAŞARI")
                     self._crn_results[crn] = {"status": "success", "message": "DRY RUN: Simüle edilmiş başarı"}
                     kalan.remove(crn)
-                    basarili.append(crn)
                 self._emit("crn_update", {"results": dict(self._crn_results)})
                 break
 
-        self._log(f"🧪 DRY RUN TAMAMLANDI — Simüle edilmiş başarı: {len(basarili)}/{len(self.ecrn_list)}")
+        basarili = len(self.ecrn_list) - len(kalan)
+        self._log(f"🧪 DRY RUN TAMAMLANDI — {basarili}/{len(self.ecrn_list)} simüle başarı")
 
     # ── Kayıt Döngüsü ──
 

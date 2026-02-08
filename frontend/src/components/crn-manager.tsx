@@ -10,6 +10,7 @@ import {
   Users,
   MapPin,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -306,6 +307,19 @@ export function CRNManager({
             </div>
           )}
         </div>
+
+        {/* Clear all — subtle footer action */}
+        {!disabled && activeList.length > 1 && (
+          <div className="px-4 pb-3 flex justify-end">
+            <button
+              onClick={() => setActiveList([])}
+              className="flex items-center gap-1 text-[10px] text-muted-foreground/35 hover:text-red-400/70 transition-colors"
+            >
+              <Trash2 className="h-2.5 w-2.5" />
+              Tümünü temizle
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

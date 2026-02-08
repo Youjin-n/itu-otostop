@@ -99,12 +99,22 @@ export function Dashboard() {
   useEffect(() => {
     if (ws.connected && !prevConnectedRef.current) {
       // WS just connected — check backend state
-      api.getStatus().then((status) => {
-        if (status.running && status.phase && status.phase !== "idle" && status.phase !== "done") {
-          // Backend is running but frontend might be out of sync
-          // WS events will take over from here
-        }
-      }).catch(() => { /* ignore — backend may be offline */ });
+      api
+        .getStatus()
+        .then((status) => {
+          if (
+            status.running &&
+            status.phase &&
+            status.phase !== "idle" &&
+            status.phase !== "done"
+          ) {
+            // Backend is running but frontend might be out of sync
+            // WS events will take over from here
+          }
+        })
+        .catch(() => {
+          /* ignore — backend may be offline */
+        });
     }
     prevConnectedRef.current = ws.connected;
     // eslint-disable-next-line react-hooks/exhaustive-deps

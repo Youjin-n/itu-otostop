@@ -11,6 +11,7 @@ import {
   ChevronDown,
   FlaskConical,
   Zap,
+  RotateCcw,
 } from "lucide-react";
 
 // Common ITU registration times
@@ -21,6 +22,13 @@ const QUICK_TIMES = [
   { label: "13:30", value: "13:30:00" },
   { label: "14:00", value: "14:00:00" },
 ];
+
+const DEFAULTS = {
+  maxDeneme: 60,
+  retryAralik: 3,
+  gecikmeBuffer: 0.005,
+  dryRun: false,
+} as const;
 
 interface SettingsPanelProps {
   kayitSaati: string;
@@ -211,10 +219,28 @@ export function SettingsPanel({
               />
             </FieldGroup>
           </div>
-          <p className="text-[11px] text-muted-foreground/60 leading-relaxed">
-            Retry Aralığı: Sunucu 3sn&apos;den sık istekleri yok sayar (VAL16).
-            Buffer: Erken varış cezasını önler (+5ms önerilen).
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] text-muted-foreground/60 leading-relaxed">
+              Retry Aralığı: Sunucu 3sn&apos;den sık istekleri yok sayar (VAL16).
+              Buffer: Erken varış cezasını önler (+5ms önerilen).
+            </p>
+            {!disabled && (
+              <button
+                type="button"
+                onClick={() => {
+                  onMaxDenemeChange(DEFAULTS.maxDeneme);
+                  onRetryAralikChange(DEFAULTS.retryAralik);
+                  onGecikmeBufferChange(DEFAULTS.gecikmeBuffer);
+                  onDryRunChange(DEFAULTS.dryRun);
+                }}
+                className="shrink-0 ml-3 flex items-center gap-1 text-[10px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors"
+                title="Varsayılan değerlere sıfırla"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Sıfırla
+              </button>
+            )}
+          </div>
 
           {/* Dry-Run Toggle */}
           <div className="flex items-center justify-between py-3 px-3 rounded-xl bg-background/40 ring-1 ring-border/20">
