@@ -1,5 +1,7 @@
 # 🎓 İTÜ OBS Ders Kayıt Otomasyonu
 
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 İTÜ Öğrenci Bilgi Sistemi (OBS) üzerinden ders kayıt işlemini otomatikleştiren full-stack uygulama. Milisaniye düzeyinde zamanlama hassasiyeti ile kayıt saati geldiğinde derslere anında kayıt olmanızı sağlar.
 
 ## ✨ Özellikler
@@ -130,3 +132,7 @@ Bu formül, isteğin sunucuya tam hedef saatte (ör: 14:00:00.000) ulaşmasını
 | Paket Yönetimi | Bun (frontend), pip (backend)                       |
 | Tema           | next-themes (karanlık/aydınlık)                     |
 | Bildirimler    | Sonner (toast)                                      |
+
+## 📄 Lisans
+
+Bu proje [Apache License 2.0](LICENSE) altında lisanslanmıştır. Türev çalışmalarda değişikliklerin belirtilmesi zorunludur.
