@@ -85,7 +85,7 @@ export function useWebSocket() {
               break;
 
             case "calibration":
-              setCalibration(event.data as CalibrationResult);
+              setCalibration(event.data as unknown as CalibrationResult);
               break;
 
             case "done":
