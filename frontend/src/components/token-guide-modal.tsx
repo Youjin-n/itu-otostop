@@ -20,31 +20,31 @@ const STEPS = [
     title: "OBS'ye Giriş Yap",
     desc: "Tarayıcından obs.itu.edu.tr adresine gidip İTÜ hesabınla giriş yap.",
     detail:
-      "Hangi sayfada olduğunuzun önemi yok, OBS'e giriş yapmış olmanız yeterli.",
+      "Hangi sayfada olduğunun önemi yok, OBS'e giriş yapmış olman yeterli.",
     icon: ExternalLink,
     color: "text-blue-400 bg-blue-500/10",
   },
   {
     title: "Geliştirici Araçlarını Aç",
-    desc: "F12 tuşuna bas veya sayfada sağ tıklayıp \"İncele\" seçeneğini seç.",
+    desc: 'F12 tuşuna bas veya sayfada sağ tıklayıp "İncele" seçeneğini seç.',
     detail:
-      "Geliştirici Araçları paneli açıldıktan sonra üst kısımdaki sekmelerden \"Ağ\" (Network) sekmesine geç. Liste boşsa sayfayı F5 ile yenile.",
+      "Mac kullanıyorsan Cmd+Option+I kısayolunu kullanabilirsin. Chrome, Firefox ve Edge'de çalışır.",
     icon: MonitorSmartphone,
     color: "text-purple-400 bg-purple-500/10",
   },
   {
     title: "Bir API İsteği Bul",
-    desc: "Ağ sekmesindeki istek listesinden herhangi bir satıra tıkla.",
+    desc: 'Üst kısımdaki sekmelerden "Ağ" (Network) sekmesine geç ve listeden herhangi bir isteğe tıkla.',
     detail:
-      "Filtre kutusuna \"api\" yazarak obs.itu.edu.tr/api/ ile başlayan istekleri süzebilirsin. Herhangi birine tıklaman yeterli.",
+      'Liste boşsa sayfayı F5 ile yenile. Filtre kutusuna "api" yazarak sonuçları daraltabilirsin.',
     icon: Search,
     color: "text-amber-400 bg-amber-500/10",
   },
   {
     title: "Token'ı Kopyala",
-    desc: "Açılan panelde \"Başlıklar\" (Headers) sekmesindeki Authorization satırını bul.",
+    desc: '"Başlıklar" (Headers) sekmesinden "Authorization" satırını bul ve "Bearer " dahil tamamını kopyala (Ctrl+C).',
     detail:
-      "\"Authorization: Bearer eyJ...\" şeklinde uzun bir değer göreceksin. \"Bearer \" dahil tamamını seç ve kopyala (Ctrl+C).",
+      'Token "eyJ" ile başlayan uzun bir metindir. Satıra çift tıklayarak tamamını hızlıca seçebilirsin.',
     icon: Copy,
     color: "text-emerald-400 bg-emerald-500/10",
   },
@@ -52,7 +52,7 @@ const STEPS = [
     title: "Buraya Yapıştır",
     desc: "Kopyaladığın token'ı soldaki Token alanına yapıştır.",
     detail:
-      "\"Bearer \" ön eki otomatik olarak kaldırılır, her iki şekilde de çalışır. Yapıştırdıktan sonra \"Token Test Et\" ile doğrulayabilirsin.",
+      '"Bearer " ön eki otomatik olarak kaldırılır. "Token Test Et" butonuyla doğruluğunu kontrol edebilirsin.',
     icon: ClipboardPaste,
     color: "text-cyan-400 bg-cyan-500/10",
   },
