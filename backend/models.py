@@ -44,6 +44,7 @@ class CalibrationResult(BaseModel):
     ntp_offset_ms: Optional[float] = None
     server_ntp_diff_ms: Optional[float] = None
     accuracy_ms: float
+    source: str = "manual"  # manual, initial, auto, final
 
 
 class CRNResultItem(BaseModel):

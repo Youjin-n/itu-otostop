@@ -185,7 +185,7 @@ class RegistrationEngine:
 
     # ── Sunucu Offset Ölçümü (Date Header Geçişi) ──
 
-    def calibrate(self) -> CalibrationData:
+    def calibrate(self, source: str = "manual") -> CalibrationData:
         self._set_phase("calibrating")
         self._log("Sunucu saati ölçülüyor...")
 
@@ -274,8 +274,66 @@ class RegistrationEngine:
             "ntp_offset_ms": ntp_off * 1000,
             "server_ntp_diff_ms": (self._calibration.server_offset - ntp_off) * 1000,
             "accuracy_ms": self._calibration.rtt_one_way * 1000,
+            "source": source,
         })
         return self._calibration
+
+    # ── Hafif Kalibrasyon (bekleme sırasında periyodik) ──
+
+    def _quick_calibrate(self, source: str = "auto") -> CalibrationData | None:
+        """Hafif kalibrasyon: 1 Date geçişi + 3 RTT örneği. ~2-3 saniye sürer."""
+        try:
+            medyan_rtt = self._rtt_olc(3)
+            poll_aralik = max(0.002, min(medyan_rtt / 2, 0.050))
+            max_poll = int(2.0 / poll_aralik)
+
+            r = self.session.head(OBS_BASE, timeout=5, allow_redirects=False)
+            son_date = r.headers.get("Date", "")
+            if not son_date:
+                return None
+
+            for _ in range(max_poll):
+                if self._cancelled.is_set():
+                    return None
+                t0_pc = time.perf_counter()
+                t_utc = time.time()
+                try:
+                    r = self.session.head(OBS_BASE, timeout=5, allow_redirects=False)
+                except Exception:
+                    time.sleep(poll_aralik)
+                    continue
+                rtt = time.perf_counter() - t0_pc
+
+                yeni = r.headers.get("Date", "")
+                if yeni and yeni != son_date:
+                    server_ts = parsedate_to_datetime(yeni).timestamp()
+                    offset = (t_utc + rtt / 2) - server_ts
+                    tek_yon = rtt / 2
+
+                    prev_ntp = self._calibration.ntp_offset if self._calibration else 0.0
+                    self._calibration = CalibrationData(
+                        server_offset=offset,
+                        rtt_one_way=tek_yon,
+                        ntp_offset=prev_ntp,
+                    )
+
+                    self._emit("calibration", {
+                        "server_offset_ms": offset * 1000,
+                        "rtt_one_way_ms": tek_yon * 1000,
+                        "rtt_full_ms": rtt * 1000,
+                        "ntp_offset_ms": prev_ntp * 1000,
+                        "server_ntp_diff_ms": (offset - prev_ntp) * 1000,
+                        "accuracy_ms": tek_yon * 1000,
+                        "source": source,
+                    })
+                    self._log(f"⚡ Hızlı kal: offset={offset*1000:+.0f}ms RTT={rtt*1000:.0f}ms [{source}]")
+                    return self._calibration
+                time.sleep(poll_aralik)
+
+            return None
+        except Exception as e:
+            self._log(f"Hızlı kalibrasyon hatası: {e}", "warning")
+            return None
 
     # ── Prewarm ──
 
@@ -511,7 +569,7 @@ class RegistrationEngine:
 
             # 1. Kalibrasyon
             self._set_phase("calibrating")
-            cal = self.calibrate()
+            cal = self.calibrate(source="initial")
             if self._cancelled.is_set():
                 return
 
@@ -537,9 +595,14 @@ class RegistrationEngine:
                     self._kayit_yap()
                 return
 
-            # 4. Bekleme döngüsü
+            # 4. Bekleme döngüsü (sürekli kalibrasyon ile)
             self._set_phase("waiting")
             prewarm2 = False
+            final_cal_done = False
+            last_recal_time = time.time()
+            RECAL_INTERVAL = 30  # saniyede bir hafif kalibrasyon
+            FINAL_CAL_THRESHOLD = 20  # son kalibrasyon bu saniyeden önce
+            recal_count = 0
 
             while not self._cancelled.is_set():
                 now = time.time()
@@ -547,6 +610,38 @@ class RegistrationEngine:
 
                 # Countdown event (her saniye)
                 self._emit("countdown", {"trigger_time": tetik, "remaining": kalan})
+
+                # ── Periyodik hafif kalibrasyon (>25sn kala, her 30sn) ──
+                if kalan > 25 and (now - last_recal_time) >= RECAL_INTERVAL:
+                    recal_count += 1
+                    self._log(f"🔄 Periyodik kalibrasyon #{recal_count}...")
+                    quick = self._quick_calibrate(source="auto")
+                    if quick:
+                        eski_tetik = tetik
+                        tetik = hedef + quick.server_offset - quick.rtt_one_way + self.gecikme_buffer
+                        self._trigger_time = tetik
+                        fark = (tetik - eski_tetik) * 1000
+                        if abs(fark) > 1:
+                            self._log(f"🔄 Tetik güncellendi: {fark:+.0f}ms kayma")
+                    last_recal_time = now
+
+                # ── Son kalibrasyon (~15-20sn kala, tam kalibrasyon) ──
+                if not final_cal_done and 12 < kalan <= FINAL_CAL_THRESHOLD:
+                    self._log("🎯 Son kalibrasyon başlıyor (tam ölçüm)...")
+                    self._set_phase("calibrating")
+                    final = self.calibrate(source="final")
+                    self._set_phase("waiting")
+                    if final:
+                        eski_tetik = tetik
+                        tetik = hedef + final.server_offset - final.rtt_one_way + self.gecikme_buffer
+                        self._trigger_time = tetik
+                        fark = (tetik - eski_tetik) * 1000
+                        self._log(f"🎯 Son kalibrasyon tamam → tetik farkı: {fark:+.0f}ms")
+                        self._emit("countdown", {"trigger_time": tetik, "remaining": tetik - time.time()})
+                    final_cal_done = True
+                    # Final sonrası bağlantıyı tekrar ısıt
+                    self._prewarm(head_only=True)
+                    prewarm2 = True
 
                 if not prewarm2 and 0 < kalan <= 5.5:
                     self._prewarm(head_only=True)

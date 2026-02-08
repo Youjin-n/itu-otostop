@@ -32,6 +32,7 @@ export interface CalibrationResult {
   ntp_offset_ms: number | null;
   server_ntp_diff_ms: number | null;
   accuracy_ms: number;
+  source?: "manual" | "initial" | "auto" | "final";
 }
 
 export interface CRNResultItem {

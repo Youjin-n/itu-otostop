@@ -181,6 +181,7 @@ async def calibrate():
         ntp_offset_ms=cal.ntp_offset * 1000,
         server_ntp_diff_ms=(cal.server_offset - cal.ntp_offset) * 1000,
         accuracy_ms=cal.rtt_one_way * 1000,
+        source="manual",
     )
 
 

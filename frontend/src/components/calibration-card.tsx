@@ -13,39 +13,66 @@ import {
 } from "lucide-react";
 import type { CalibrationResult } from "@/lib/api";
 
-// ── Calibration History (localStorage) ──
+// ── Calibration History (localStorage — token bazlı) ──
 
 interface CalibrationEntry {
   timestamp: number;
   server_offset_ms: number;
   rtt_one_way_ms: number;
+  source?: string; // manual, initial, auto, final
 }
 
-const HISTORY_KEY = "otostop-cal-history";
-const MAX_ENTRIES = 10;
+const HISTORY_PREFIX = "otostop-cal-";
+const MAX_ENTRIES = 20;
 
-function loadHistory(): CalibrationEntry[] {
+/** Token'ın ilk 16 karakterinden basit bir hash üretir */
+function tokenHash(token: string): string {
+  if (!token || token.length < 8) return "default";
+  let hash = 0;
+  const sample = token.slice(0, 32);
+  for (let i = 0; i < sample.length; i++) {
+    hash = ((hash << 5) - hash + sample.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+function historyKey(token: string): string {
+  return `${HISTORY_PREFIX}${tokenHash(token)}`;
+}
+
+function loadHistory(token: string): CalibrationEntry[] {
   try {
-    const raw = localStorage.getItem(HISTORY_KEY);
+    const raw = localStorage.getItem(historyKey(token));
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
 }
 
-function saveToHistory(cal: CalibrationResult) {
+function saveToHistory(token: string, cal: CalibrationResult) {
   try {
-    const history = loadHistory();
+    const key = historyKey(token);
+    const history = loadHistory(token);
     history.push({
       timestamp: Date.now(),
       server_offset_ms: cal.server_offset_ms,
       rtt_one_way_ms: cal.rtt_one_way_ms,
+      source: cal.source ?? "manual",
     });
-    // Keep last N entries
+    // Son N kaydı tut
     while (history.length > MAX_ENTRIES) history.shift();
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    localStorage.setItem(key, JSON.stringify(history));
   } catch {
     /* ignore */
+  }
+}
+
+/** Eski global key varsa temizle */
+function migrateOldHistory() {
+  try {
+    localStorage.removeItem("otostop-cal-history");
+  } catch {
+    /* */
   }
 }
 
@@ -103,6 +130,23 @@ function Sparkline({
 interface CalibrationCardProps {
   calibration: CalibrationResult | null;
   loading?: boolean;
+  token?: string; // History'yi token bazlı tutmak için
+}
+
+/** Kaynak etiket çevirisi */
+const SOURCE_LABELS: Record<string, { label: string; color: string }> = {
+  manual: { label: "Manuel", color: "text-blue-400" },
+  initial: { label: "Başlangıç", color: "text-violet-400" },
+  auto: { label: "Otomatik", color: "text-teal-400" },
+  final: { label: "Son Ölçüm", color: "text-amber-400" },
+};
+
+/** Standart sapma hesapla */
+function stdDev(values: number[]): number {
+  if (values.length < 2) return 0;
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const sq = values.map((v) => (v - mean) ** 2);
+  return Math.sqrt(sq.reduce((a, b) => a + b, 0) / values.length);
 }
 
 function Metric({
@@ -146,42 +190,61 @@ function Metric({
 export function CalibrationCard({
   calibration,
   loading,
+  token = "",
 }: CalibrationCardProps) {
   const [history, setHistory] = useState<CalibrationEntry[]>([]);
+
+  // Migrate old global key once
+  useEffect(() => {
+    migrateOldHistory();
+  }, []);
 
   // Save new calibration to history + reload
   useEffect(() => {
     if (calibration) {
-      saveToHistory(calibration);
-      setHistory(loadHistory());
+      saveToHistory(token, calibration);
+      setHistory(loadHistory(token));
     }
-  }, [calibration]);
+  }, [calibration, token]);
 
-  // Load history on mount
+  // Load history on mount / token change
   useEffect(() => {
-    setHistory(loadHistory());
-  }, []);
+    setHistory(loadHistory(token));
+  }, [token]);
 
-  // Trend indicator
-  const trend = useMemo(() => {
-    if (history.length < 2) return null;
-    const recent = history[history.length - 1].rtt_one_way_ms;
-    const prev = history[history.length - 2].rtt_one_way_ms;
-    const diff = recent - prev;
-    if (Math.abs(diff) < 1)
-      return { icon: Minus, label: "Stabil", color: "text-muted-foreground" };
-    return diff > 0
-      ? {
-          icon: TrendingUp,
-          label: `+${diff.toFixed(0)}ms`,
-          color: "text-orange-400",
-        }
-      : {
-          icon: TrendingDown,
-          label: `${diff.toFixed(0)}ms`,
-          color: "text-emerald-400",
-        };
+  // Stability indicator — std deviation of last 5 RTT values
+  const stability = useMemo(() => {
+    const last5 = history.slice(-5);
+    if (last5.length < 2) return null;
+    const rttValues = last5.map((h) => h.rtt_one_way_ms);
+    const sigma = stdDev(rttValues);
+    if (sigma < 3)
+      return {
+        icon: Minus,
+        label: "Stabil",
+        color: "text-emerald-400",
+        desc: `σ=${sigma.toFixed(1)}ms`,
+      };
+    if (sigma < 10)
+      return {
+        icon: TrendingUp,
+        label: "Dalgalı",
+        color: "text-orange-400",
+        desc: `σ=${sigma.toFixed(1)}ms`,
+      };
+    return {
+      icon: TrendingDown,
+      label: "Kararsız",
+      color: "text-red-400",
+      desc: `σ=${sigma.toFixed(1)}ms`,
+    };
   }, [history]);
+
+  // Source badge
+  const sourceBadge = useMemo(() => {
+    const src = calibration?.source ?? "manual";
+    return SOURCE_LABELS[src] ?? SOURCE_LABELS.manual;
+  }, [calibration?.source]);
 
   return (
     <div className="overflow-hidden">
@@ -191,23 +254,33 @@ export function CalibrationCard({
             <Activity className="h-4 w-4 text-violet-400" />
           </div>
           <h3 className="text-sm font-semibold">Kalibrasyon</h3>
-          {trend && (
+          {stability && (
             <span
-              className={`flex items-center gap-1 text-[10px] font-medium ${trend.color}`}
+              className={`flex items-center gap-1 text-[10px] font-medium ${stability.color}`}
+              title={stability.desc}
             >
-              <trend.icon className="h-3 w-3" />
-              {trend.label}
+              <stability.icon className="h-3 w-3" />
+              {stability.label}
             </span>
           )}
         </div>
-        {loading && (
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-          >
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </motion.div>
-        )}
+        <div className="flex items-center gap-2">
+          {calibration && (
+            <span
+              className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-current/5 ${sourceBadge.color}`}
+            >
+              {sourceBadge.label}
+            </span>
+          )}
+          {loading && (
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+            >
+              <Activity className="h-4 w-4 text-muted-foreground" />
+            </motion.div>
+          )}
+        </div>
       </div>
       <div className="px-5 pb-5">
         {calibration ? (
@@ -271,21 +344,34 @@ export function CalibrationCard({
                 transition={{ delay: 0.3 }}
                 className="mt-3 pt-3 border-t border-border/20"
               >
-                <p className="text-[10px] text-muted-foreground/50 uppercase tracking-wider mb-2">
-                  Son {history.length} ölçüm
-                </p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] text-muted-foreground/50 uppercase tracking-wider">
+                    Son {Math.min(history.length, 10)} ölçüm
+                  </p>
+                  {history.length > 0 && history[history.length - 1].source && (
+                    <p className="text-[9px] text-muted-foreground/40">
+                      {new Date(
+                        history[history.length - 1].timestamp,
+                      ).toLocaleTimeString("tr-TR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                      })}
+                    </p>
+                  )}
+                </div>
                 <div className="flex items-center justify-between gap-4">
                   <div className="space-y-0.5">
                     <p className="text-[10px] text-blue-400">Offset</p>
                     <Sparkline
-                      data={history.map((h) => h.server_offset_ms)}
+                      data={history.slice(-10).map((h) => h.server_offset_ms)}
                       color="oklch(0.65 0.18 240)"
                     />
                   </div>
                   <div className="space-y-0.5">
                     <p className="text-[10px] text-emerald-400">RTT</p>
                     <Sparkline
-                      data={history.map((h) => h.rtt_one_way_ms)}
+                      data={history.slice(-10).map((h) => h.rtt_one_way_ms)}
                       color="oklch(0.7 0.18 165)"
                     />
                   </div>

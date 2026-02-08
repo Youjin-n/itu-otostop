@@ -591,6 +591,7 @@ export function Dashboard() {
                   <CalibrationCard
                     calibration={ws.calibration ?? calibrationData}
                     loading={calibrating}
+                    token={token}
                   />
                 </SpotlightCard>
               </motion.div>
