@@ -53,7 +53,7 @@ export function Dashboard() {
   // Course info from OBS API
   const [courseInfo, setCourseInfo] = useState<Record<string, CourseInfo>>({});
   const [lookingUpCRNs, setLookingUpCRNs] = useState<Set<string>>(new Set());
-  const lookupInFlight = useRef(false);
+  const attemptedCRNs = useRef(new Set<string>());
 
   const isRunning =
     ws.phase === "token_check" ||
@@ -168,14 +168,16 @@ export function Dashboard() {
   }, [token]);
 
   // Auto-lookup CRN course info from OBS
+  // Uses attemptedCRNs ref to prevent infinite re-fetch loops
   useEffect(() => {
     const allCRNs = [...new Set([...crnList, ...scrnList])];
     const missing = allCRNs.filter(
-      (crn) => !courseInfo[crn] && !lookingUpCRNs.has(crn),
+      (crn) => !attemptedCRNs.current.has(crn),
     );
-    if (missing.length === 0 || lookupInFlight.current) return;
+    if (missing.length === 0) return;
 
-    lookupInFlight.current = true;
+    // Mark as attempted IMMEDIATELY to prevent re-entry
+    missing.forEach((crn) => attemptedCRNs.current.add(crn));
     setLookingUpCRNs((prev) => new Set([...prev, ...missing]));
 
     api
@@ -200,9 +202,8 @@ export function Dashboard() {
           missing.forEach((crn) => next.delete(crn));
           return next;
         });
-        lookupInFlight.current = false;
       });
-  }, [crnList, scrnList, courseInfo, lookingUpCRNs]);
+  }, [crnList, scrnList]);
 
   // Calibrate
   const handleCalibrate = async () => {

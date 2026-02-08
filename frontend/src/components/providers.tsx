@@ -10,24 +10,27 @@ function ClerkThemeWrapper({ children }: { children: React.ReactNode }) {
   const { resolvedTheme } = useTheme();
   return (
     <ClerkProvider
+      signInUrl="/sign-in"
+      signUpUrl="/sign-up"
+      afterSignOutUrl="/sign-in"
       localization={{
         ...trTR,
         signIn: {
+          ...(trTR as Record<string, unknown>).signIn as Record<string, unknown>,
           start: {
-            title: "İTÜ Otostop'a Giriş",
-            subtitle: "Devam etmek için giriş yap",
-            actionText: "Hesabın yok mu?",
-            actionLink: "Kayıt ol",
+            ...((trTR as Record<string, unknown>).signIn as Record<string, unknown>)?.start as Record<string, unknown>,
+            title: "İTÜ OBS Kayıt",
+            subtitle: "Otomatik ders kayıt aracına giriş yap",
           },
-        },
+        } as never,
         signUp: {
+          ...(trTR as Record<string, unknown>).signUp as Record<string, unknown>,
           start: {
-            title: "İTÜ Otostop'a Kayıt",
-            subtitle: "Hesap oluşturmak için devam et",
-            actionText: "Zaten hesabın var mı?",
-            actionLink: "Giriş yap",
+            ...((trTR as Record<string, unknown>).signUp as Record<string, unknown>)?.start as Record<string, unknown>,
+            title: "İTÜ OBS Kayıt",
+            subtitle: "Hesap oluştur ve kayıt aracını kullanmaya başla",
           },
-        },
+        } as never,
         userButton: {
           action__signOut: "Çıkış Yap",
           action__manageAccount: "Hesabı Yönet",
