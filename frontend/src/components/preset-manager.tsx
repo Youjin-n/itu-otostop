@@ -212,15 +212,17 @@ export function PresetManager({
         <div className="space-y-1.5">
           <AnimatePresence mode="popLayout">
             {presets.map((preset) => (
-              <motion.button
+              <motion.div
                 key={preset.id}
                 layout
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, x: 30, scale: 0.95 }}
-                onClick={() => handleLoadClick(preset)}
-                disabled={disabled}
-                className="w-full flex items-center justify-between py-2.5 px-3.5 rounded-xl bg-background/40 ring-1 ring-border/20 hover:ring-primary/30 hover:bg-muted/30 group transition-all disabled:opacity-40 text-left"
+                onClick={() => !disabled && handleLoadClick(preset)}
+                role="button"
+                tabIndex={disabled ? -1 : 0}
+                aria-disabled={disabled}
+                className="w-full flex items-center justify-between py-2.5 px-3.5 rounded-xl bg-background/40 ring-1 ring-border/20 hover:ring-primary/30 hover:bg-muted/30 group transition-all aria-disabled:opacity-40 text-left cursor-pointer"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <Download className="h-3.5 w-3.5 text-muted-foreground shrink-0 group-hover:text-primary transition-colors" />
@@ -243,7 +245,7 @@ export function PresetManager({
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
-              </motion.button>
+              </motion.div>
             ))}
           </AnimatePresence>
 
